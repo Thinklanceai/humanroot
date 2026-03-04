@@ -1,0 +1,1068 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HumanRoot — Chain Explorer</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&family=IBM+Plex+Sans:wght@300;400;500&display=swap');
+
+  :root {
+    --bg: #0d0d10;
+    --surface: #16161a;
+    --surface2: #222229;
+    --border: #3a3a45;
+    --accent: #00ff88;
+    --accent2: #0088ff;
+    --warn: #ff6b35;
+    --revoked: #ff3355;
+    --text: #f2f2fa;
+    --muted: #9898b0;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'IBM Plex Sans', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,255,136,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,255,136,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Header */
+  header {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(10,10,11,0.92);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 0 32px;
+    height: 56px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+
+  .logo {
+    font-family: var(--mono);
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    color: var(--accent);
+  }
+  .logo span { color: var(--muted); font-weight: 300; }
+
+  .header-right {
+    display: flex; align-items: center; gap: 16px;
+  }
+
+  .server-status {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    display: flex; align-items: center; gap: 6px;
+  }
+  .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 6px var(--accent);
+    animation: pulse 2s ease-in-out infinite;
+  }
+  .dot.offline { background: var(--revoked); box-shadow: 0 0 6px var(--revoked); animation: none; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  /* Layout */
+  .container {
+    position: relative; z-index: 1;
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 32px;
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 380px 1fr;
+    gap: 24px;
+    align-items: start;
+  }
+
+  /* Panels */
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .panel-header {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    text-transform: uppercase;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+
+  /* Issue form */
+  .form { padding: 20px; }
+
+  .field { margin-bottom: 16px; }
+
+  label {
+    display: block;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    color: #b0b0c8;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  input, select, textarea {
+    width: 100%;
+    background: #22222a;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    color: #f0f0fa;
+    font-family: var(--mono);
+    font-size: 13px;
+    padding: 9px 12px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  input:focus, select:focus, textarea:focus {
+    border-color: var(--accent);
+  }
+  input::placeholder { color: var(--muted); }
+
+  .scope-input {
+    display: flex; gap: 8px;
+  }
+  .scope-input input { flex: 1; }
+
+  .scopes-list {
+    display: flex; flex-wrap: wrap; gap: 6px;
+    margin-top: 8px;
+  }
+
+  .scope-tag {
+    background: rgba(0,255,136,0.08);
+    border: 1px solid rgba(0,255,136,0.2);
+    border-radius: 2px;
+    padding: 3px 8px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent);
+    display: flex; align-items: center; gap: 6px;
+    cursor: pointer;
+  }
+  .scope-tag:hover { background: rgba(255,51,85,0.1); border-color: var(--revoked); color: var(--revoked); }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 10px 20px;
+    border: none; border-radius: 3px;
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: #000;
+    width: 100%;
+  }
+  .btn-primary:hover { background: #00e87a; }
+  .btn-primary:disabled { background: var(--border); color: var(--muted); cursor: not-allowed; }
+
+  .btn-secondary {
+    background: transparent;
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .btn-secondary:hover { border-color: var(--accent2); color: var(--accent2); }
+
+  .btn-danger {
+    background: transparent;
+    color: var(--revoked);
+    border: 1px solid rgba(255,51,85,0.3);
+    font-size: 11px;
+    padding: 6px 12px;
+  }
+  .btn-danger:hover { background: rgba(255,51,85,0.1); }
+
+  .btn-sm {
+    padding: 5px 10px;
+    font-size: 11px;
+  }
+
+  /* DRC list */
+  .drc-list { padding: 12px; }
+
+  .drc-item {
+    padding: 12px 16px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: all 0.15s;
+    position: relative;
+    overflow: hidden;
+  }
+  .drc-item::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: var(--accent);
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+  .drc-item:hover { border-color: rgba(0,255,136,0.3); background: var(--surface2); }
+  .drc-item:hover::before { opacity: 1; }
+  .drc-item.active { border-color: var(--accent); background: rgba(0,255,136,0.05); }
+  .drc-item.active::before { opacity: 1; }
+  .drc-item.revoked { border-color: rgba(255,51,85,0.3); opacity: 0.6; }
+  .drc-item.revoked::before { background: var(--revoked); opacity: 1; }
+
+  .drc-id {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent);
+    margin-bottom: 4px;
+  }
+  .drc-item.revoked .drc-id { color: var(--revoked); }
+
+  .drc-meta {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: #a8a8c0;
+  }
+
+  .drc-badge {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 2px;
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    font-weight: 500;
+  }
+  .badge-root { background: rgba(0,136,255,0.15); color: var(--accent2); }
+  .badge-child { background: rgba(0,255,136,0.1); color: var(--accent); }
+  .badge-revoked { background: rgba(255,51,85,0.15); color: var(--revoked); }
+
+  /* Chain explorer */
+  .chain-view { padding: 24px; }
+
+  .chain-empty {
+    text-align: center;
+    padding: 80px 20px;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+  .chain-empty .big { font-size: 32px; margin-bottom: 12px; opacity: 0.3; }
+
+  /* Chain graph */
+  .chain-graph {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+  }
+
+  .chain-node {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    width: 100%;
+    animation: slideIn 0.3s ease forwards;
+    opacity: 0;
+  }
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateX(-12px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  .node-connector {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: 4px;
+  }
+
+  .node-dot {
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    border: 2px solid var(--accent);
+    background: var(--bg);
+    flex-shrink: 0;
+    box-shadow: 0 0 8px rgba(0,255,136,0.4);
+  }
+  .node-dot.root {
+    background: var(--accent);
+    box-shadow: 0 0 12px var(--accent);
+  }
+  .node-dot.revoked-dot {
+    border-color: var(--revoked);
+    box-shadow: 0 0 8px rgba(255,51,85,0.4);
+  }
+
+  .node-line {
+    width: 2px;
+    flex: 1;
+    min-height: 32px;
+    background: linear-gradient(to bottom, var(--accent), rgba(0,255,136,0.1));
+    margin: 4px 0;
+  }
+
+  .node-card {
+    flex: 1;
+    background: #22222a;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 16px;
+    margin-bottom: 8px;
+    transition: border-color 0.15s;
+  }
+  .node-card:hover { border-color: rgba(0,255,136,0.3); }
+  .node-card.revoked-card { border-color: rgba(255,51,85,0.3); background: rgba(255,51,85,0.04); }
+
+  .node-title {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+
+  .node-id {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--accent);
+    margin-bottom: 10px;
+    word-break: break-all;
+  }
+
+  .node-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .node-field { }
+  .node-field .key {
+    font-family: var(--mono);
+    font-size: 9px;
+    color: #a0a0ba;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 2px;
+  }
+  .node-field .val {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text);
+  }
+
+  .scope-chips {
+    display: flex; flex-wrap: wrap; gap: 4px;
+    margin-top: 8px;
+  }
+  .scope-chip {
+    padding: 2px 7px;
+    border-radius: 2px;
+    font-family: var(--mono);
+    font-size: 10px;
+    background: rgba(0,255,136,0.08);
+    border: 1px solid rgba(0,255,136,0.15);
+    color: var(--accent);
+  }
+
+  .node-actions {
+    display: flex; gap: 8px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+  }
+
+  /* Stats bar */
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 24px;
+  }
+
+  .stat {
+    background: var(--surface);
+    padding: 16px 20px;
+  }
+  .stat .stat-val {
+    font-family: var(--mono);
+    font-size: 24px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+  .stat .stat-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: #a8a8c0;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .stat.accent .stat-val { color: var(--accent); }
+  .stat.warn .stat-val { color: var(--warn); }
+  .stat.danger .stat-val { color: var(--revoked); }
+
+  /* Filters */
+  .filters {
+    display: flex; gap: 10px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+  .filters input {
+    flex: 1;
+    min-width: 180px;
+    font-size: 12px;
+    padding: 7px 12px;
+  }
+
+  /* Notifications */
+  .toast-container {
+    position: fixed;
+    bottom: 24px; right: 24px;
+    z-index: 999;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+
+  .toast {
+    background: #22222a;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 12px 16px;
+    font-family: var(--mono);
+    font-size: 12px;
+    min-width: 280px;
+    display: flex; align-items: center; gap: 10px;
+    animation: toastIn 0.2s ease;
+    border-left: 3px solid var(--accent);
+  }
+  .toast.error { border-left-color: var(--revoked); }
+  .toast.warn { border-left-color: var(--warn); }
+
+  @keyframes toastIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Modal */
+  .modal-bg {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 200;
+    align-items: center; justify-content: center;
+  }
+  .modal-bg.open { display: flex; }
+
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 28px;
+    max-width: 560px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+  }
+
+  .modal h3 {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+    margin-bottom: 16px;
+    letter-spacing: 0.05em;
+  }
+
+  .modal pre {
+    background: #22222a;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 16px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent);
+    overflow-x: auto;
+    max-height: 400px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+
+  .modal-actions {
+    display: flex; gap: 8px;
+    margin-top: 16px;
+  }
+
+  /* Loader */
+  .spinner {
+    display: inline-block;
+    width: 14px; height: 14px;
+    border: 2px solid rgba(0,255,136,0.2);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .empty-list {
+    padding: 24px;
+    text-align: center;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  hr.divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 16px 0;
+  }
+
+  /* Search */
+  .search-bar {
+    display: flex; gap: 8px;
+    padding: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .search-bar input { flex: 1; font-size: 12px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">HUMAN<span>/</span>ROOT <span>— chain explorer</span></div>
+  <div class="header-right">
+    <div class="server-status">
+      <div class="dot" id="statusDot"></div>
+      <span id="statusText">connecting...</span>
+    </div>
+    <button class="btn btn-secondary btn-sm" onclick="refreshAll()">↻ refresh</button>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- Stats -->
+  <div class="stats" id="statsBar">
+    <div class="stat accent"><div class="stat-val" id="statTotal">—</div><div class="stat-label">Total DRCs</div></div>
+    <div class="stat"><div class="stat-val" id="statRoots">—</div><div class="stat-label">Root DRCs</div></div>
+    <div class="stat warn"><div class="stat-val" id="statChains">—</div><div class="stat-label">Chains</div></div>
+    <div class="stat danger"><div class="stat-val" id="statRevoked">—</div><div class="stat-label">Revoked</div></div>
+  </div>
+
+  <div class="layout">
+
+    <!-- Left: Issue + List -->
+    <div>
+
+      <!-- Issue form -->
+      <div class="panel" style="margin-bottom:20px">
+        <div class="panel-header">
+          <span>issue drc</span>
+          <span id="issueSpinner" style="display:none"><div class="spinner"></div></span>
+        </div>
+        <div class="form">
+          <div class="field">
+            <label>Human ID</label>
+            <input type="text" id="humanId" placeholder="alice@example.com" />
+          </div>
+          <div class="field">
+            <label>Agent ID</label>
+            <input type="text" id="agentId" placeholder="my-agent-v1" />
+          </div>
+          <div class="field">
+            <label>Scopes</label>
+            <div class="scope-input">
+              <input type="text" id="scopeInput" placeholder="email.read" onkeydown="scopeKeydown(event)" />
+              <button class="btn btn-secondary btn-sm" onclick="addScope()">+ add</button>
+            </div>
+            <div class="scopes-list" id="scopesList"></div>
+          </div>
+          <div class="field">
+            <label>Expires in</label>
+            <select id="expiresIn">
+              <option value="1h">1 hour</option>
+              <option value="6h">6 hours</option>
+              <option value="24h" selected>24 hours</option>
+              <option value="7d">7 days</option>
+              <option value="30d">30 days</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Max delegation depth</label>
+            <select id="maxDepth">
+              <option value="0">0 — no sub-delegation</option>
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="3" selected>3</option>
+              <option value="5">5</option>
+            </select>
+          </div>
+          <button class="btn btn-primary" id="issueBtn" onclick="issueDRC()">
+            ⬡ issue delegation root certificate
+          </button>
+        </div>
+      </div>
+
+      <!-- DRC list -->
+      <div class="panel">
+        <div class="panel-header">
+          <span>delegation records</span>
+          <span id="drcCount" style="color:var(--accent)">0</span>
+        </div>
+        <div class="search-bar">
+          <input type="text" id="filterInput" placeholder="filter by human, agent..." oninput="filterDRCs()" />
+        </div>
+        <div id="drcList" class="drc-list">
+          <div class="empty-list">No DRCs yet. Issue one above.</div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Right: Chain explorer -->
+    <div>
+      <div class="panel">
+        <div class="panel-header">
+          <span id="chainTitle">chain explorer</span>
+          <div style="display:flex;gap:8px" id="chainActions" style="display:none">
+            <button class="btn btn-secondary btn-sm" onclick="exportAudit()" id="exportBtn" style="display:none">↓ export audit</button>
+          </div>
+        </div>
+        <div id="chainView" class="chain-view">
+          <div class="chain-empty">
+            <div class="big">⬡</div>
+            Select a DRC to explore its chain
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- JSON modal -->
+<div class="modal-bg" id="jsonModal">
+  <div class="modal">
+    <h3 id="modalTitle">DRC JSON</h3>
+    <pre id="modalContent"></pre>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="copyModal()">copy</button>
+      <button class="btn btn-secondary" onclick="closeModal()">close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast container -->
+<div class="toast-container" id="toasts"></div>
+
+<script>
+const API = 'http://localhost:8001';
+let allDRCs = [];
+let selectedId = null;
+let scopes = [];
+
+// ---------------------------------------------------------------------------
+// Init
+// ---------------------------------------------------------------------------
+
+async function init() {
+  await checkServer();
+  await refreshAll();
+}
+
+async function checkServer() {
+  try {
+    const r = await fetch(`${API}/drcs`);
+    if (r.ok) {
+      document.getElementById('statusDot').classList.remove('offline');
+      document.getElementById('statusText').textContent = `${API}`;
+    }
+  } catch {
+    document.getElementById('statusDot').classList.add('offline');
+    document.getElementById('statusText').textContent = 'server offline';
+  }
+}
+
+async function refreshAll() {
+  try {
+    const r = await fetch(`${API}/drcs`);
+    const data = await r.json();
+    allDRCs = data.drcs || [];
+    renderStats();
+    renderDRCList(allDRCs);
+    document.getElementById('drcCount').textContent = allDRCs.length;
+    if (selectedId) loadChain(selectedId);
+  } catch(e) {
+    toast('Cannot reach server at ' + API, 'error');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Stats
+// ---------------------------------------------------------------------------
+
+function renderStats() {
+  const total = allDRCs.length;
+  const roots = allDRCs.filter(d => !d.parent_drc_id).length;
+  const revoked = allDRCs.filter(d => d.revoked).length;
+  const chains = roots;
+  document.getElementById('statTotal').textContent = total;
+  document.getElementById('statRoots').textContent = roots;
+  document.getElementById('statChains').textContent = chains;
+  document.getElementById('statRevoked').textContent = revoked;
+}
+
+// ---------------------------------------------------------------------------
+// DRC list
+// ---------------------------------------------------------------------------
+
+function renderDRCList(drcs) {
+  const el = document.getElementById('drcList');
+  if (!drcs.length) {
+    el.innerHTML = '<div class="empty-list">No DRCs yet. Issue one above.</div>';
+    return;
+  }
+  el.innerHTML = drcs.map(d => {
+    const isRoot = !d.parent_drc_id;
+    const isRevoked = d.revoked;
+    const shortId = d.drc_id.substring(0, 8) + '...';
+    const badge = isRevoked
+      ? '<span class="drc-badge badge-revoked">revoked</span>'
+      : isRoot
+        ? '<span class="drc-badge badge-root">root</span>'
+        : '<span class="drc-badge badge-child">child</span>';
+    return `
+      <div class="drc-item ${selectedId === d.drc_id ? 'active' : ''} ${isRevoked ? 'revoked' : ''}"
+           onclick="selectDRC('${d.drc_id}')">
+        <div class="drc-id">${shortId} ${badge}</div>
+        <div class="drc-meta">${d.principal.human_id} → ${d.agent.agent_id}</div>
+        <div class="drc-meta" style="margin-top:3px">${d.authority.scopes.join(', ')}</div>
+      </div>`;
+  }).join('');
+}
+
+function filterDRCs() {
+  const q = document.getElementById('filterInput').value.toLowerCase();
+  if (!q) { renderDRCList(allDRCs); return; }
+  const filtered = allDRCs.filter(d =>
+    d.principal.human_id.toLowerCase().includes(q) ||
+    d.agent.agent_id.toLowerCase().includes(q) ||
+    d.drc_id.toLowerCase().includes(q) ||
+    d.authority.scopes.some(s => s.toLowerCase().includes(q))
+  );
+  renderDRCList(filtered);
+}
+
+async function selectDRC(id) {
+  selectedId = id;
+  renderDRCList(allDRCs.filter(d => {
+    const q = document.getElementById('filterInput').value.toLowerCase();
+    if (!q) return true;
+    return d.principal.human_id.toLowerCase().includes(q) ||
+           d.agent.agent_id.toLowerCase().includes(q);
+  }));
+  await loadChain(id);
+}
+
+// ---------------------------------------------------------------------------
+// Chain explorer
+// ---------------------------------------------------------------------------
+
+async function loadChain(drcId) {
+  document.getElementById('chainView').innerHTML = '<div class="chain-empty"><div class="spinner"></div></div>';
+  try {
+    const r = await fetch(`${API}/drc/${drcId}/chain`);
+    const data = await r.json();
+    renderChain(data);
+    document.getElementById('chainTitle').textContent = `chain — ${data.length} hop${data.length > 1 ? 's' : ''}`;
+    document.getElementById('exportBtn').style.display = 'inline-flex';
+  } catch(e) {
+    document.getElementById('chainView').innerHTML = '<div class="chain-empty">Failed to load chain.</div>';
+  }
+}
+
+function renderChain(data) {
+  const view = document.getElementById('chainView');
+  const chain = data.chain;
+
+  view.innerHTML = `<div class="chain-graph" id="chainGraph"></div>`;
+  const graph = document.getElementById('chainGraph');
+
+  chain.forEach((drc, i) => {
+    const isRoot = i === 0;
+    const isLast = i === chain.length - 1;
+    const isRevoked = allDRCs.find(d => d.drc_id === drc.drc_id)?.revoked;
+    const delay = i * 80;
+
+    const node = document.createElement('div');
+    node.className = 'chain-node';
+    node.style.animationDelay = delay + 'ms';
+
+    const issued = new Date(drc.issued_at).toLocaleString();
+    const expires = new Date(drc.expires_at).toLocaleString();
+
+    node.innerHTML = `
+      <div class="node-connector">
+        <div class="node-dot ${isRoot ? 'root' : ''} ${isRevoked ? 'revoked-dot' : ''}"></div>
+        ${!isLast ? '<div class="node-line"></div>' : ''}
+      </div>
+      <div class="node-card ${isRevoked ? 'revoked-card' : ''}">
+        <div class="node-title">
+          <span>${isRoot ? '⬡ root certificate' : `hop ${i}`}</span>
+          <div style="display:flex;gap:6px">
+            ${isRevoked ? '<span class="drc-badge badge-revoked">revoked</span>' : ''}
+            <button class="btn btn-secondary btn-sm" onclick="showJSON('${drc.drc_id}')">json</button>
+            ${!isRevoked ? `<button class="btn btn-danger btn-sm" onclick="revokeFromChain('${drc.drc_id}')">revoke</button>` : ''}
+          </div>
+        </div>
+        <div class="node-id">${drc.drc_id}</div>
+        <div class="node-grid">
+          <div class="node-field">
+            <div class="key">human</div>
+            <div class="val">${drc.principal.human_id}</div>
+          </div>
+          <div class="node-field">
+            <div class="key">agent</div>
+            <div class="val">${drc.agent.agent_id}</div>
+          </div>
+          <div class="node-field">
+            <div class="key">issued</div>
+            <div class="val" style="font-size:11px">${issued}</div>
+          </div>
+          <div class="node-field">
+            <div class="key">expires</div>
+            <div class="val" style="font-size:11px">${expires}</div>
+          </div>
+          <div class="node-field">
+            <div class="key">depth remaining</div>
+            <div class="val">${drc.authority.max_delegation_depth}</div>
+          </div>
+          <div class="node-field">
+            <div class="key">provider</div>
+            <div class="val">${drc.agent.provider}</div>
+          </div>
+        </div>
+        <div class="key">scopes</div>
+        <div class="scope-chips">
+          ${drc.authority.scopes.map(s => `<span class="scope-chip">${s}</span>`).join('')}
+        </div>
+        ${drc.root_hash ? `<div style="margin-top:10px"><div class="key">root hash</div><div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:2px;word-break:break-all">${drc.root_hash}</div></div>` : ''}
+      </div>
+    `;
+    graph.appendChild(node);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Issue DRC
+// ---------------------------------------------------------------------------
+
+async function issueDRC() {
+  const humanId = document.getElementById('humanId').value.trim();
+  const agentId = document.getElementById('agentId').value.trim();
+  const expiresIn = document.getElementById('expiresIn').value;
+  const maxDepth = parseInt(document.getElementById('maxDepth').value);
+
+  if (!humanId || !agentId) { toast('Human ID and Agent ID are required', 'error'); return; }
+  if (!scopes.length) { toast('Add at least one scope', 'warn'); return; }
+
+  document.getElementById('issueBtn').disabled = true;
+  document.getElementById('issueSpinner').style.display = 'block';
+
+  try {
+    const r = await fetch(`${API}/drc/issue`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        human_id: humanId, agent_id: agentId, scopes,
+        expires_in: expiresIn, max_delegation_depth: maxDepth
+      })
+    });
+    const data = await r.json();
+    if (!r.ok) { toast(data.detail || 'Error issuing DRC', 'error'); return; }
+    toast(`DRC issued: ${data.drc_id.substring(0,8)}...`);
+    scopes = [];
+    document.getElementById('scopesList').innerHTML = '';
+    await refreshAll();
+    selectDRC(data.drc_id);
+  } catch(e) {
+    toast('Network error', 'error');
+  } finally {
+    document.getElementById('issueBtn').disabled = false;
+    document.getElementById('issueSpinner').style.display = 'none';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Scopes
+// ---------------------------------------------------------------------------
+
+function addScope() {
+  const input = document.getElementById('scopeInput');
+  const val = input.value.trim();
+  if (!val || scopes.includes(val)) { input.value = ''; return; }
+  scopes.push(val);
+  input.value = '';
+  renderScopes();
+}
+
+function scopeKeydown(e) {
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); addScope(); }
+}
+
+function renderScopes() {
+  document.getElementById('scopesList').innerHTML = scopes.map(s =>
+    `<span class="scope-tag" onclick="removeScope('${s}')" title="click to remove">${s} ×</span>`
+  ).join('');
+}
+
+function removeScope(s) {
+  scopes = scopes.filter(x => x !== s);
+  renderScopes();
+}
+
+// ---------------------------------------------------------------------------
+// Revoke
+// ---------------------------------------------------------------------------
+
+async function revokeFromChain(drcId) {
+  if (!confirm(`Revoke DRC ${drcId.substring(0,8)}... and all its children?`)) return;
+  try {
+    const r = await fetch(`${API}/drc/revoke`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({drc_id: drcId, reason: 'revoked via dashboard'})
+    });
+    const data = await r.json();
+    toast(`Revoked ${data.count} DRC(s)`, 'warn');
+    await refreshAll();
+  } catch(e) {
+    toast('Revocation failed', 'error');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Audit export
+// ---------------------------------------------------------------------------
+
+async function exportAudit() {
+  if (!selectedId) return;
+  try {
+    const r = await fetch(`${API}/drc/${selectedId}/chain`);
+    const data = await r.json();
+    const audit = {
+      exported_at: new Date().toISOString(),
+      chain_length: data.length,
+      any_revoked: data.any_revoked,
+      chain: data.chain
+    };
+    const blob = new Blob([JSON.stringify(audit, null, 2)], {type: 'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `humanroot-audit-${selectedId.substring(0,8)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast('Audit exported');
+  } catch(e) {
+    toast('Export failed', 'error');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// JSON modal
+// ---------------------------------------------------------------------------
+
+async function showJSON(drcId) {
+  try {
+    const r = await fetch(`${API}/drc/${drcId}`);
+    const data = await r.json();
+    document.getElementById('modalTitle').textContent = `DRC — ${drcId.substring(0,8)}...`;
+    document.getElementById('modalContent').textContent = JSON.stringify(data, null, 2);
+    document.getElementById('jsonModal').classList.add('open');
+  } catch(e) {
+    toast('Failed to load DRC', 'error');
+  }
+}
+
+function closeModal() {
+  document.getElementById('jsonModal').classList.remove('open');
+}
+
+function copyModal() {
+  navigator.clipboard.writeText(document.getElementById('modalContent').textContent);
+  toast('Copied to clipboard');
+}
+
+document.getElementById('jsonModal').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+
+// ---------------------------------------------------------------------------
+// Toast
+// ---------------------------------------------------------------------------
+
+function toast(msg, type = 'ok') {
+  const el = document.createElement('div');
+  el.className = `toast ${type === 'error' ? 'error' : type === 'warn' ? 'warn' : ''}`;
+  el.innerHTML = `<span>${type === 'ok' ? '✓' : type === 'warn' ? '⚠' : '✗'}</span> ${msg}`;
+  document.getElementById('toasts').appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+// ---------------------------------------------------------------------------
+// Start
+// ---------------------------------------------------------------------------
+
+init();
+setInterval(checkServer, 10000);
+</script>
+</body>
+</html>

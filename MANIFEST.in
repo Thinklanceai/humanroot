@@ -1,0 +1,7 @@
+include README.md
+include LICENSE
+include spec/DRC-SPEC-0.1.md
+recursive-include humanroot *.py
+recursive-include integrations *.py
+recursive-include server *.py
+recursive-include dashboard *.html

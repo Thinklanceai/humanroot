@@ -1,0 +1,255 @@
+# HumanRoot
+
+**Delegation Root Certificate for Autonomous Agents**
+
+> *Every agent action traces back to a human decision. HumanRoot makes that traceable, provable, and legally defensible.*
+
+---
+
+## The Problem
+
+Autonomous AI agents send emails, execute API calls, write to databases, and delegate tasks to other agents. Yet the moment a human delegates authority to an agent is entirely informal — a checkbox, a system prompt, an API key.
+
+When a chain of agents acts — Agent A delegating to Agent B delegating to Agent C — the original human intent disappears entirely.
+
+**HumanRoot solves this with a single primitive: the Delegation Root Certificate (DRC).**
+
+---
+
+## Install
+
+```bash
+pip install humanroot
+```
+
+## Quickstart
+
+```python
+from humanroot import delegate
+
+drc = delegate(
+    human_id="alice@example.com",
+    agent_id="my-agent-v1",
+    scopes=["email.read", "calendar.write"],
+    expires_in="24h",
+)
+
+# DRC propagates automatically through all agent calls
+agent.run(task, drc=drc)
+```
+
+---
+
+## What is a DRC?
+
+A **Delegation Root Certificate** is a signed, structured, machine-readable record of a human delegation act. It guarantees:
+
+| Property | Guarantee |
+|---|---|
+| **Non-repudiation** | Human principal cannot deny having issued the delegation |
+| **Scope-binding** | Actions constrained by explicit scopes — anything outside is unauthorized |
+| **Causal traceability** | Every action → DRC → parent DRC → human. Always reconstructible |
+| **Restriction-only** | Sub-delegations may only restrict, never expand, parent authority |
+| **Provider-agnostic** | Works across OpenAI, Anthropic, LangChain, CrewAI, custom agents |
+| **Revocability** | Any DRC revoked instantly, cascades to all children |
+
+---
+
+## Framework Integrations
+
+### Anthropic Claude
+
+```python
+from humanroot import delegate
+from humanroot.integrations.anthropic_claude import HumanRootAnthropic
+
+drc = delegate(human_id="alice@example.com", agent_id="claude-agent",
+               scopes=["text.generate"], expires_in="1h")
+
+client = HumanRootAnthropic(drc=drc)
+response = client.messages.create(
+    model="claude-opus-4-6",
+    max_tokens=1024,
+    messages=[{"role": "user", "content": "Summarise this contract."}],
+)
+```
+
+### OpenAI
+
+```python
+from humanroot.integrations.openai_chat import HumanRootOpenAI
+
+client = HumanRootOpenAI(drc=drc)
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": "Draft this email."}],
+)
+```
+
+### LangChain
+
+```python
+from humanroot.integrations.langchain import drc_runnable, DRCCallbackHandler
+
+# Option A: wrap any Runnable
+secured_llm = drc_runnable(llm, drc)
+result = secured_llm.invoke([HumanMessage(content="Hello")])
+
+# Option B: non-invasive callback
+result = llm.invoke(input, config={"callbacks": [DRCCallbackHandler(drc)]})
+```
+
+### CrewAI
+
+```python
+from humanroot.integrations.crewai import drc_crew
+
+crew = drc_crew(Crew(agents=[...], tasks=[...]), drc)
+result = crew.kickoff()
+```
+
+---
+
+## Sub-delegation
+
+Agents can delegate to other agents — but only within the bounds of their own authority:
+
+```python
+from humanroot import sub_delegate
+
+# Agent A delegates to Agent B with reduced scope
+child_drc = sub_delegate(
+    parent_drc,
+    agent_id="agent-b",
+    scopes=["email.read"],           # subset of parent scopes only
+    expires_at=parent_drc.expires_at - timedelta(hours=1),
+)
+```
+
+Rules enforced automatically:
+- Child scopes ⊆ parent scopes (expansion forbidden)
+- Child expiry ≤ parent expiry
+- Delegation depth decrements at every hop
+- `root_hash` always points to the human-signed origin
+
+---
+
+## CLI
+
+```bash
+# Generate a key pair
+humanroot keygen --out ./keys
+
+# Issue a DRC
+humanroot issue \
+  --human-id alice@example.com \
+  --agent-id my-agent-v1 \
+  --scopes email.read calendar.write \
+  --expires-in 24h \
+  --key ./keys/private.pem \
+  --out drc.json
+
+# Verify a DRC file
+humanroot verify --drc-file drc.json --pubkey ./keys/public.pem
+
+# Inspect a delegation chain (requires server)
+humanroot chain --drc-id <uuid>
+
+# Revoke a DRC and all children
+humanroot revoke --drc-id <uuid> --reason "key compromised"
+
+# Check revocation status
+humanroot status --drc-id <uuid>
+```
+
+---
+
+## API Server
+
+```bash
+pip install "humanroot[server]"
+uvicorn server.app:app --reload --port 8001
+```
+
+Endpoints:
+
+| Method | Path | Description |
+|---|---|---|
+| POST | `/drc/issue` | Issue a root DRC |
+| POST | `/drc/sub-delegate` | Sub-delegate from existing DRC |
+| GET | `/drc/{id}` | Fetch a DRC |
+| GET | `/drc/{id}/chain` | Full delegation chain |
+| POST | `/drc/revoke` | Revoke DRC + children |
+| GET | `/drc/{id}/status` | Revocation status |
+| GET | `/drcs` | List all DRCs |
+
+Interactive docs: `http://localhost:8001/docs`
+Dashboard: `http://localhost:8001/dashboard`
+
+---
+
+## Cryptography
+
+HumanRoot uses **ES256 (ECDSA P-256)** — lightweight, widely supported, no external PKI required.
+
+```python
+from humanroot import generate_keypair, sign_drc, verify_drc
+
+priv, pub = generate_keypair()
+signed_drc = sign_drc(drc, priv)
+assert verify_drc(signed_drc, pub)
+```
+
+---
+
+## Design Principles
+
+- **No blockchain** — cryptographic signing does not require a shared ledger
+- **No centralized authority** — any party can issue and verify DRCs independently
+- **No action content** — DRCs authorize; they do not log what agents actually did
+- **No government identity required** — `human_id` is any stable identifier you control
+- **Provider-agnostic** — the standard is independent of any AI provider or cloud
+
+---
+
+## Project Structure
+
+```
+humanroot/
+├── humanroot/          # Core SDK
+│   ├── models.py       # DRC data model
+│   ├── crypto.py       # ES256 sign/verify
+│   ├── chain.py        # Sub-delegation + chain validation
+│   ├── delegate.py     # Public API: delegate()
+│   └── cli.py          # CLI entry point
+├── integrations/       # Framework integrations
+│   ├── anthropic_claude.py
+│   ├── openai_chat.py
+│   ├── langchain.py
+│   └── crewai.py
+├── server/             # FastAPI server
+│   ├── app.py
+│   ├── db.py           # SQLite persistence
+│   └── revocation.py   # Revocation with cascade
+├── dashboard/          # Web UI — chain explorer
+│   └── index.html
+├── tests/              # 30 tests
+└── spec/               # Formal specification
+    └── DRC-SPEC-0.1.md
+```
+
+---
+
+## Spec
+
+The formal DRC specification is in [`spec/DRC-SPEC-0.1.md`](spec/DRC-SPEC-0.1.md).
+
+Open questions, contributions, and objections welcome:
+- `github.com/humanroot`
+- `spec@humanroot.dev`
+
+---
+
+## License
+
+MIT
