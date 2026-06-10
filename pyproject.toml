@@ -29,6 +29,7 @@ dependencies = [
 [project.optional-dependencies]
 server = ["fastapi>=0.100", "uvicorn>=0.23"]
 dev    = ["pytest>=7.0", "build", "twine"]
+mcp    = []
 
 [project.urls]
 Homepage    = "https://github.com/Thinklanceai/humanroot"
@@ -37,6 +38,7 @@ Spec        = "https://github.com/Thinklanceai/humanroot/blob/main/spec/DRC-SPEC
 
 [project.scripts]
 humanroot = "humanroot.cli:main"
+humanroot-mcp = "humanroot_mcp.cli:main"
 
 [tool.setuptools.packages.find]
 where    = ["."]
