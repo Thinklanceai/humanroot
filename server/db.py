@@ -7,10 +7,11 @@ No ORM — pure sqlite3 stdlib.
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 from pathlib import Path
 
-DB_PATH = Path("humanroot.db")
+DB_PATH = Path(os.environ.get("HUMANROOT_DB", "humanroot.db"))
 
 
 def get_conn() -> sqlite3.Connection:

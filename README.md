@@ -245,8 +245,8 @@ humanroot/
 The formal DRC specification is in [`spec/DRC-SPEC-0.1.md`](spec/DRC-SPEC-0.1.md).
 
 Open questions, contributions, and objections welcome:
-- `github.com/humanroot`
-- `spec@humanroot.dev`
+- `github.com/Thinklanceai/humanroot`
+- `info@thinklanceai.com`
 
 ---
 

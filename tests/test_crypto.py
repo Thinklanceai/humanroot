@@ -1,12 +1,13 @@
+import dataclasses
 import unittest
 from datetime import datetime, timedelta, timezone
 from humanroot.crypto import generate_keypair, sign_drc, verify_drc, hash_drc
 from humanroot.models import DelegationRootCertificate, Principal, AgentRef, Authority
 
-def make_drc():
+def make_drc(hours=1):
     now = datetime.now(timezone.utc)
     return DelegationRootCertificate(
-        expires_at=now + timedelta(hours=1),
+        expires_at=now + timedelta(hours=hours),
         principal=Principal(human_id="alice@example.com"),
         agent=AgentRef(agent_id="agent-1"),
         authority=Authority(scopes=["email.read", "calendar.write"]),
@@ -37,6 +38,35 @@ class TestCrypto(unittest.TestCase):
         _, pub = generate_keypair()
         with self.assertRaises(ValueError):
             verify_drc(drc, pub)
+
+    def test_expired_signature_rejected(self):
+        now = datetime.now(timezone.utc)
+        drc = DelegationRootCertificate(
+            issued_at=now - timedelta(hours=2),
+            expires_at=now - timedelta(hours=1),
+            principal=Principal(human_id="alice@example.com"),
+            agent=AgentRef(agent_id="agent-1"),
+            authority=Authority(scopes=["email.read"]),
+        )
+        priv, pub = generate_keypair()
+        signed = sign_drc(drc, priv)
+        self.assertFalse(verify_drc(signed, pub))
+
+    def test_signature_transplant_rejected(self):
+        priv, pub = generate_keypair()
+        broad = sign_drc(make_drc(), priv)
+        other = make_drc()
+        forged = dataclasses.replace(other, signature=broad.signature)
+        self.assertFalse(verify_drc(forged, pub))
+
+    def test_tampered_scope_rejected(self):
+        priv, pub = generate_keypair()
+        signed = sign_drc(make_drc(), priv)
+        tampered = dataclasses.replace(
+            signed,
+            authority=Authority(scopes=["email.read", "database.write"]),
+        )
+        self.assertFalse(verify_drc(tampered, pub))
 
     def test_hash_deterministic(self):
         drc = make_drc()

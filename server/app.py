@@ -3,6 +3,13 @@ humanroot.server.app
 ---------------------
 FastAPI server exposing the HumanRoot DRC API.
 
+Hardened in 0.2.0:
+- Every API route requires an API key (X-API-Key header) compared in
+  constant time against HUMANROOT_API_KEY. The server refuses to
+  operate unconfigured instead of running open.
+- CORS origins come from HUMANROOT_CORS_ORIGINS (comma-separated)
+  instead of a wildcard. Default: localhost only.
+
 Routes:
   POST   /drc/issue           Issue a root DRC
   POST   /drc/sub-delegate    Sub-delegate from an existing DRC
@@ -14,10 +21,12 @@ Routes:
 """
 from __future__ import annotations
 
+import hmac
+import os
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -26,6 +35,21 @@ from humanroot import delegate, sub_delegate, reconstruct_chain
 from humanroot.chain import DelegationError
 from server.db import init_db, save_drc, load_drc, list_drcs
 from server.revocation import revoke, is_revoked, get_revocation
+
+
+# ---------------------------------------------------------------------------
+# Auth
+# ---------------------------------------------------------------------------
+
+def require_api_key(x_api_key: str | None = Header(None)) -> None:
+    configured = os.environ.get("HUMANROOT_API_KEY")
+    if not configured:
+        raise HTTPException(
+            status_code=503,
+            detail="Server not configured: set HUMANROOT_API_KEY",
+        )
+    if x_api_key is None or not hmac.compare_digest(x_api_key, configured):
+        raise HTTPException(status_code=401, detail="Invalid or missing API key")
 
 
 # ---------------------------------------------------------------------------
@@ -70,15 +94,23 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="HumanRoot API",
     description="Delegation Root Certificate for Autonomous Agents",
-    version="0.1.0",
+    version="0.2.0",
     lifespan=lifespan,
 )
 
+_origins = [
+    o.strip()
+    for o in os.environ.get(
+        "HUMANROOT_CORS_ORIGINS", "http://localhost:8001"
+    ).split(",")
+    if o.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=_origins,
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type", "X-API-Key"],
 )
 
 # Serve dashboard at /dashboard
@@ -88,13 +120,11 @@ if _os.path.isdir(_dashboard):
     app.mount("/dashboard", StaticFiles(directory=_dashboard, html=True), name="dashboard")
 
 
-
-
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
 
-@app.post("/drc/issue", status_code=201)
+@app.post("/drc/issue", status_code=201, dependencies=[Depends(require_api_key)])
 def issue_drc(body: IssueDRCBody):
     """Issue a root DRC for a human→agent delegation."""
     try:
@@ -117,7 +147,7 @@ def issue_drc(body: IssueDRCBody):
     return drc_dict
 
 
-@app.post("/drc/sub-delegate", status_code=201)
+@app.post("/drc/sub-delegate", status_code=201, dependencies=[Depends(require_api_key)])
 def sub_delegate_drc(body: SubDelegateBody):
     """Create a child DRC from an existing DRC."""
     parent_dict = load_drc(body.parent_drc_id)
@@ -150,7 +180,7 @@ def sub_delegate_drc(body: SubDelegateBody):
     return child_dict
 
 
-@app.get("/drc/{drc_id}")
+@app.get("/drc/{drc_id}", dependencies=[Depends(require_api_key)])
 def get_drc(drc_id: str):
     """Fetch a single DRC by ID."""
     drc_dict = load_drc(drc_id)
@@ -160,7 +190,7 @@ def get_drc(drc_id: str):
     return drc_dict
 
 
-@app.get("/drc/{drc_id}/chain")
+@app.get("/drc/{drc_id}/chain", dependencies=[Depends(require_api_key)])
 def get_chain(drc_id: str):
     """Reconstruct the full delegation chain up to the root."""
     leaf_dict = load_drc(drc_id)
@@ -193,7 +223,7 @@ def get_chain(drc_id: str):
     }
 
 
-@app.post("/drc/revoke")
+@app.post("/drc/revoke", dependencies=[Depends(require_api_key)])
 def revoke_drc(body: RevokeBody):
     """Revoke a DRC and all its descendants."""
     if not load_drc(body.drc_id):
@@ -202,7 +232,7 @@ def revoke_drc(body: RevokeBody):
     return {"revoked": revoked_ids, "count": len(revoked_ids)}
 
 
-@app.get("/drc/{drc_id}/status")
+@app.get("/drc/{drc_id}/status", dependencies=[Depends(require_api_key)])
 def check_status(drc_id: str):
     """Check revocation status of a DRC."""
     if not load_drc(drc_id):
@@ -215,7 +245,7 @@ def check_status(drc_id: str):
     }
 
 
-@app.get("/drcs")
+@app.get("/drcs", dependencies=[Depends(require_api_key)])
 def list_all_drcs(human_id: str | None = None, agent_id: str | None = None):
     """List DRCs, optionally filtered by human_id or agent_id."""
     drcs = list_drcs(human_id=human_id, agent_id=agent_id)

@@ -3,8 +3,8 @@
 **Status:** Working Draft  
 **Version:** 0.1  
 **Date:** 2026  
-**Repository:** github.com/humanroot  
-**Contact:** spec@humanroot.dev
+**Repository:** github.com/Thinklanceai/humanroot  
+**Contact:** info@thinklanceai.com
 
 ---
 
@@ -269,7 +269,7 @@ The following are deliberately unresolved in v0.1:
 
 ## 13. Reference Implementation
 
-Python reference implementation: `github.com/humanroot`
+Python reference implementation: `github.com/Thinklanceai/humanroot`
 
 ```bash
 pip install humanroot
@@ -307,4 +307,4 @@ child = sub_delegate(
 ---
 
 *This is a working draft. Comments, objections, and contributions are welcome.*  
-*github.com/humanroot — spec@humanroot.dev*
+*github.com/Thinklanceai/humanroot — info@thinklanceai.com*

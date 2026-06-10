@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "humanroot"
-version = "0.1.0"
+version = "0.2.0"
 description = "Delegation Root Certificate for Autonomous Agents"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -23,6 +23,7 @@ classifiers = [
 dependencies = [
     "cryptography>=41.0",
     "PyJWT>=2.0",
+    "rfc8785>=0.1",
 ]
 
 [project.optional-dependencies]
@@ -30,9 +31,9 @@ server = ["fastapi>=0.100", "uvicorn>=0.23"]
 dev    = ["pytest>=7.0", "build", "twine"]
 
 [project.urls]
-Homepage    = "https://humanroot.dev"
-Repository  = "https://github.com/humanroot/humanroot"
-Spec        = "https://github.com/humanroot/humanroot/blob/main/spec/DRC-SPEC-0.1.md"
+Homepage    = "https://github.com/Thinklanceai/humanroot"
+Repository  = "https://github.com/Thinklanceai/humanroot"
+Spec        = "https://github.com/Thinklanceai/humanroot/blob/main/spec/DRC-SPEC-0.1.md"
 
 [project.scripts]
 humanroot = "humanroot.cli:main"

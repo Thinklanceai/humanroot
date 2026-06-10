@@ -1,7 +1,18 @@
 """
 humanroot.chain
 ---------------
-Propagation model: sub-delegation with scope restriction and depth enforcement.
+Propagation model: sub-delegation with scope restriction and depth
+enforcement.
+
+Hardened in 0.2.0 — `validate_chain` is strict by default:
+- every DRC in the chain MUST be signed and verifiable against the
+  principal's public key (a chain that merely "looks" consistent no
+  longer validates);
+- structural invariants are re-checked at validation time, not only
+  at creation time: parent linkage, child expiry bounded by parent
+  expiry, scope subset, depth decrement, and root_hash matching the
+  recomputed hash of the actual root.
+Pass strict=False to get the 0.1 structural-only behavior.
 """
 from __future__ import annotations
 
@@ -9,7 +20,7 @@ import dataclasses
 from datetime import datetime, timezone
 from typing import Optional
 
-from humanroot.crypto import hash_drc, sign_drc
+from humanroot.crypto import hash_drc, sign_drc, verify_drc
 from humanroot.models import AgentRef, Authority, DelegationRootCertificate
 from cryptography.hazmat.primitives.asymmetric.ec import EllipticCurvePrivateKey
 
@@ -101,14 +112,26 @@ def reconstruct_chain(
 def validate_chain(
     chain: list[DelegationRootCertificate],
     public_keys: dict[str, object] | None = None,
+    strict: bool = True,
 ) -> None:
+    """Validate a delegation chain.
+
+    strict=True (default): every DRC must carry a signature that
+    verifies against the public key registered for its principal in
+    `public_keys`. A missing signature or missing key is an error,
+    not a silent pass.
+
+    strict=False: structural validation only (0.1 behavior), with
+    signatures checked opportunistically when both signature and key
+    are present.
+    """
     if not chain:
         raise DelegationError("Empty chain")
 
-    from humanroot.crypto import verify_drc
-
     if not chain[0].is_root():
         raise DelegationError("First element of chain must be a root DRC")
+
+    expected_root_hash = hash_drc(chain[0])
 
     for i, drc in enumerate(chain):
         if drc.is_expired():
@@ -116,15 +139,45 @@ def validate_chain(
 
         if i > 0:
             parent = chain[i - 1]
+
+            if drc.parent_drc_id != parent.drc_id:
+                raise DelegationError(
+                    f"DRC {drc.drc_id} parent linkage broken: "
+                    f"expected {parent.drc_id}, got {drc.parent_drc_id}"
+                )
+
+            if drc.expires_at > parent.expires_at:
+                raise DelegationError(
+                    f"DRC {drc.drc_id} expires after its parent"
+                )
+
             extra = set(drc.authority.scopes) - set(parent.authority.scopes)
             if extra:
                 raise DelegationError(f"DRC {drc.drc_id} expands scope: {extra}")
+
             if drc.authority.max_delegation_depth >= parent.authority.max_delegation_depth:
                 raise DelegationError(
                     f"DRC {drc.drc_id} did not decrement delegation depth"
                 )
 
-        if public_keys and drc.signature:
-            key = public_keys.get(drc.principal.human_id)
-            if key and not verify_drc(drc, key):
+            if drc.root_hash != expected_root_hash:
+                raise DelegationError(
+                    f"DRC {drc.drc_id} root_hash does not match the chain root"
+                )
+
+        if strict:
+            if not drc.signature:
+                raise DelegationError(
+                    f"DRC {drc.drc_id} is unsigned — strict validation requires signatures"
+                )
+            if not public_keys or drc.principal.human_id not in public_keys:
+                raise DelegationError(
+                    f"No public key provided for principal {drc.principal.human_id}"
+                )
+            if not verify_drc(drc, public_keys[drc.principal.human_id]):
                 raise DelegationError(f"Invalid signature on DRC {drc.drc_id}")
+        else:
+            if public_keys and drc.signature:
+                key = public_keys.get(drc.principal.human_id)
+                if key and not verify_drc(drc, key):
+                    raise DelegationError(f"Invalid signature on DRC {drc.drc_id}")
